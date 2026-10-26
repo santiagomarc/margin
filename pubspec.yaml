@@ -1,0 +1,30 @@
+name: margin
+description: "Study notes and PDF markup with tape, for Android tablets."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.7
+  # Pinned: CI and the cloud SessionStart hook install exactly this version.
+  flutter: 3.47.8
+
+dependencies:
+  drift: ^2.35.3
+  drift_flutter: ^0.3.1
+  file_picker: ^13.3.0
+  flutter:
+    sdk: flutter
+  path_provider: ^2.1.6
+  pdfrx: ^2.10.1
+  perfect_freehand: ^2.5.2+1
+  rbush: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: ^2.35.2
+  build_runner: ^2.17.1
+
+flutter:
+  uses-material-design: true
