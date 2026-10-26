@@ -94,7 +94,9 @@ jobs:
         run: |
           flutter build apk --release \
             --target-platform android-arm,android-arm64 \
-            --build-number ${{ github.run_number }}
+            --build-number ${{ github.run_number }} \
+            --dart-define=MARGIN_BUILD=${{ github.run_number }} \
+            --dart-define=MARGIN_COMMIT=${{ github.sha }}
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk \
             "dist/margin-build-${{ github.run_number }}.apk"
@@ -112,5 +114,6 @@ jobs:
           gh release create "build-${{ github.run_number }}" dist/*.apk \
             --target "${{ github.sha }}" \
             --title "Margin build ${{ github.run_number }}" \
-            --notes "Built from ${{ github.sha }}. Download the APK on the tablet and install it over the old one." \
+            --notes "Download the APK on the tablet and install it over the old one. Built from ${{ github.sha }}." \
+            --generate-notes \
             --latest

@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../canvas/paper_painter.dart';
+import '../db/ink_repository.dart';
+import '../db/page_background.dart';
 import '../ui/theme.dart';
+import 'notebook_screen.dart';
 
 /// The first screen: subjects on the left, notebooks on the right.
 ///
-/// Empty for now; subjects and notebooks arrive in Session 2.
+/// For now it only holds the scratch page; subjects and notebooks arrive in
+/// Session 2.
 class LibraryScreen extends StatelessWidget {
   const LibraryScreen({super.key});
 
@@ -133,38 +138,82 @@ class _NotebookArea extends StatelessWidget {
             style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
-        Expanded(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 88,
-                  height: 88,
-                  decoration: const BoxDecoration(
-                    color: MarginColors.paper,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.menu_book_outlined,
-                    size: 40,
-                    color: MarginColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text('No notebooks yet', style: text.titleLarge),
-                const SizedBox(height: 8),
-                Text(
-                  'Your notebooks and imported PDFs will show up here.',
-                  style: text.bodyMedium?.copyWith(
-                    color: MarginColors.textMuted,
-                  ),
-                ),
-              ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
+          child: _NotebookCard(
+            title: 'Scratch page',
+            subtitle: 'Try the pen here',
+            onOpen: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const NotebookScreen()),
             ),
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
+          child: Text(
+            'Notebooks, subjects and PDF import arrive in the next updates.',
+            style: text.bodyMedium?.copyWith(color: MarginColors.textMuted),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// A notebook in the library grid: a page preview, title and subtitle.
+class _NotebookCard extends StatelessWidget {
+  const _NotebookCard({
+    required this.title,
+    required this.subtitle,
+    required this.onOpen,
+  });
+
+  static const width = 150.0;
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    const page = InkRepository.a4;
+    const scale = width / 595.28;
+    return Semantics(
+      button: true,
+      label: 'Open $title',
+      child: GestureDetector(
+        onTap: onOpen,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: width,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: width,
+                height: page.height * scale,
+                child: CustomPaint(
+                  painter: PaperPainter(
+                    template: PaperTemplate.lined,
+                    pageSize: page,
+                    scale: scale,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              Text(
+                subtitle,
+                style: text.bodySmall?.copyWith(color: MarginColors.textMuted),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
