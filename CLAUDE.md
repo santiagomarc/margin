@@ -11,7 +11,8 @@ drift (SQLite), pdfrx (PDFium), perfect_freehand, file_picker, rbush. State: bui
 ## Folders
 `lib/app` screens · `lib/input` pointer handling · `lib/tools` pen/highlighter/eraser/lasso/tape ·
 `lib/canvas` layer painters, picture cache, hit testing · `lib/pdf` pdfrx + page image cache ·
-`lib/state` ChangeNotifiers · `lib/db` drift schema · `lib/history` undo/redo commands · `lib/ui` theme, toolbar.
+`lib/state` ChangeNotifiers · `lib/db` drift schema · `lib/history` undo/redo commands ·
+`lib/diagnostics` overlay, benchmarks, bug report · `lib/ui` theme, toolbar.
 Tests mirror `lib/` under `test/`; goldens live in `test/**/goldens/`.
 
 ## Commands
@@ -25,10 +26,13 @@ Tests mirror `lib/` under `test/`; goldens live in `test/**/goldens/`.
 - Keep widget rebuilds out of the drawing path: input, tools and painters are plain Dart; painters repaint via a Listenable.
 - Use `Listener` for drawing input, never `GestureDetector` (its slop delays stroke start).
 - Store positions in page coordinates (PDF points), never screen pixels.
-- Finger input: one finger = current tool, a second finger drops the live stroke and pans/zooms, a quick tap flips tape.
+- Finger input: one finger = current tool, a second finger drops the live stroke and pans/zooms;
+  taps: one finger flips tape, two fingers undo, three redo. Screens, gestures, tool defaults: PLAN "UX and design".
+- No allocations per pointer event in the input/drawing hot path (preallocated buffers).
+- Touch targets at least 48 dp.
 - Every change to notes is an undoable command; DB writes are batched after finger-up, never mid-stroke.
 - Only pages near the screen hold pictures or images; release the rest (2 GB RAM).
-- No blur, shadows or saveLayer-heavy effects on the canvas.
+- No blur, shadows or saveLayer-heavy effects on or around pages; hairline borders instead.
 - Every feature gets tests (unit for logic, golden for new screens).
 - Don't raise minSdk above 24 or upgrade Flutter past a release that drops API 24.
 - Never commit signing keys or `key.properties`.
