@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/gestures.dart';
 
 import '../diagnostics/touch_stats.dart';
@@ -21,6 +23,10 @@ abstract interface class InputHandler {
 
   /// Two or more fingers moved together by [delta].
   void scrollBy(Offset delta);
+
+  /// The fingers of a scroll lifted, moving at [velocity] (logical pixels
+  /// per second; zero when they had stopped).
+  void scrollEnd(Offset velocity);
 }
 
 enum _Mode { idle, drawing, single, multi }
@@ -61,7 +67,26 @@ class InputRouter {
   Duration _sequenceStart = Duration.zero;
   int _maxFingers = 0;
   bool _tapCandidate = false;
+  bool _scrolled = false;
   Offset _lastCentroid = Offset.zero;
+  Duration _lastScrollTime = Duration.zero;
+
+  // Recent scroll positions (cumulative, one per event timestamp) for the
+  // fling velocity: every finger of one Android event shares a timestamp.
+  static const _samples = 8;
+  final Float64List _sampleTime = Float64List(_samples);
+  final Float64List _sampleX = Float64List(_samples);
+  final Float64List _sampleY = Float64List(_samples);
+  int _sampleCount = 0;
+  int _sampleLast = -1;
+  double _scrollX = 0;
+  double _scrollY = 0;
+
+  /// A scroll whose fingers rested this long before lifting doesn't fling.
+  static const flingMaxPause = Duration(milliseconds: 80);
+
+  /// How far back the fling velocity looks.
+  static const flingWindow = Duration(milliseconds: 100);
 
   void handle(PointerEvent event) {
     if (event.kind == PointerDeviceKind.trackpad) return;
@@ -102,6 +127,11 @@ class InputRouter {
     }
     if (_mode != _Mode.multi) {
       _mode = _Mode.multi;
+      _scrolled = false;
+      _sampleCount = 0;
+      _sampleLast = -1;
+      _scrollX = 0;
+      _scrollY = 0;
       _tapCandidate =
           event.timeStamp - _sequenceStart <= multiTapMaxDuration &&
           !_touches.values.any((t) => t.moved);
@@ -126,7 +156,11 @@ class InputRouter {
           _tapCandidate = false;
         }
         final centroid = _centroid();
-        if (!_tapCandidate) handler.scrollBy(centroid - _lastCentroid);
+        if (!_tapCandidate) {
+          final delta = centroid - _lastCentroid;
+          handler.scrollBy(delta);
+          _trackVelocity(delta, event.timeStamp);
+        }
         _lastCentroid = centroid;
       case _Mode.drawing || _Mode.single || _Mode.idle:
         break;
@@ -162,10 +196,49 @@ class InputRouter {
             !touch.moved &&
             event.timeStamp - _sequenceStart <= multiTapMaxDuration) {
           handler.multiFingerTap(_maxFingers);
+        } else if (_scrolled) {
+          final resting = event.timeStamp - _lastScrollTime > flingMaxPause;
+          handler.scrollEnd(
+            cancelled || resting ? Offset.zero : _flingVelocity(),
+          );
         }
       case _Mode.drawing || _Mode.single || _Mode.idle:
         if (_touches.isEmpty) _mode = _Mode.idle;
     }
+  }
+
+  void _trackVelocity(Offset delta, Duration time) {
+    _scrollX += delta.dx;
+    _scrollY += delta.dy;
+    final t = time.inMicroseconds.toDouble();
+    if (_sampleCount == 0 || _sampleTime[_sampleLast] != t) {
+      _sampleLast = (_sampleLast + 1) % _samples;
+      if (_sampleCount < _samples) _sampleCount++;
+    }
+    _sampleTime[_sampleLast] = t;
+    _sampleX[_sampleLast] = _scrollX;
+    _sampleY[_sampleLast] = _scrollY;
+    _scrolled = true;
+    _lastScrollTime = time;
+  }
+
+  /// Logical pixels per second over the last [flingWindow] of the scroll.
+  Offset _flingVelocity() {
+    if (_sampleCount < 2) return Offset.zero;
+    final newest = _sampleLast;
+    final window = flingWindow.inMicroseconds;
+    var oldest = newest;
+    for (var i = 1; i < _sampleCount; i++) {
+      final j = (newest - i + _samples) % _samples;
+      if (_sampleTime[newest] - _sampleTime[j] > window) break;
+      oldest = j;
+    }
+    final dt = (_sampleTime[newest] - _sampleTime[oldest]) / 1e6;
+    if (dt <= 0) return Offset.zero;
+    return Offset(
+      (_sampleX[newest] - _sampleX[oldest]) / dt,
+      (_sampleY[newest] - _sampleY[oldest]) / dt,
+    );
   }
 
   Offset _centroid() {

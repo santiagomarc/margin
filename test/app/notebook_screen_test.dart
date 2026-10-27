@@ -11,17 +11,25 @@ import 'package:margin/canvas/ink_stroke.dart';
 import 'package:margin/canvas/live_layer.dart';
 import 'package:margin/canvas/point_buffer.dart';
 import 'package:margin/canvas/stroke_geometry.dart';
+import 'package:margin/canvas/page_viewport.dart';
+import 'package:margin/db/database.dart';
 import 'package:margin/db/ids.dart';
 import 'package:margin/db/ink_repository.dart';
-import 'package:margin/db/tables.dart';
+import 'package:margin/db/notebook_repository.dart';
+import 'package:margin/state/notebook_controller.dart';
+import 'package:margin/ui/notebook_toolbar.dart';
 import 'package:margin/tools/pen_tool.dart';
 
 import '../helpers.dart';
 
 void main() {
   late AppServices services;
+  late NotebookPage firstPage;
 
-  setUp(() => services = testServices());
+  setUp(() async {
+    services = testServices();
+    firstPage = await createTestNotebook(services.db);
+  });
 
   Future<void> pumpNotebook(
     WidgetTester tester, {
@@ -31,16 +39,37 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MarginApp(services: services));
-    await tester.tap(find.text('Scratch page'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cell structure'));
     await tester.pumpAndSettle();
     expect(find.byType(NotebookScreen), findsOneWidget);
   }
 
-  InkLayerController ink(WidgetTester tester) {
+  /// Adds pages to the test notebook straight in the database.
+  Future<List<String>> addPages(int count) async {
+    final repo = NotebookRepository(
+      services.db,
+      firstPage.notebookId,
+      now: () => testNow,
+    );
+    final ids = [firstPage.id];
+    for (var i = 0; i < count; i++) {
+      final id = 'page-${i + 2}';
+      await repo.insertPage(firstPage.copyWith(id: id));
+      ids.add(id);
+    }
+    await repo.writePageOrder(ids);
+    return ids;
+  }
+
+  NotebookController controllerOf(WidgetTester tester) =>
+      tester.widget<PageViewport>(find.byType(PageViewport)).controller;
+
+  InkLayerController ink(WidgetTester tester, {int index = 0}) {
     final paint = tester.widget<CustomPaint>(
-      find.byWidgetPredicate(
-        (w) => w is CustomPaint && w.painter is InkPainter,
-      ),
+      find
+          .byWidgetPredicate((w) => w is CustomPaint && w.painter is InkPainter)
+          .at(index),
     );
     return (paint.painter! as InkPainter).controller;
   }
@@ -53,6 +82,12 @@ void main() {
     );
     return (paint.painter! as LivePainter).live;
   }
+
+  double scrollOffset(WidgetTester tester) =>
+      controllerOf(tester).scrollController().offset;
+
+  Future<List<String>> savedOrder() async =>
+      (await services.db.select(services.db.notebooks).getSingle()).pageIds;
 
   /// Draws a stroke with one finger, 16 ms between samples.
   Future<void> drawStroke(
@@ -71,6 +106,33 @@ void main() {
     }
     await gesture.up(timeStamp: const Duration(milliseconds: 180));
     await tester.pump();
+  }
+
+  /// Scrolls with two fingers by [dy] (negative scrolls down the notebook),
+  /// slowly enough that the list doesn't fling.
+  Future<void> twoFingerScroll(WidgetTester tester, double dy) async {
+    final a = await tester.createGesture(pointer: 21);
+    final b = await tester.createGesture(pointer: 22);
+    await a.down(const Offset(400, 600), timeStamp: Duration.zero);
+    await b.down(const Offset(600, 600), timeStamp: Duration.zero);
+    const steps = 20;
+    for (var i = 1; i <= steps; i++) {
+      final t = Duration(milliseconds: 400 + i * 16);
+      await a.moveTo(Offset(400, 600 + dy * i / steps), timeStamp: t);
+      await b.moveTo(Offset(600, 600 + dy * i / steps), timeStamp: t);
+    }
+    // Rest before lifting: no fling.
+    const end = Duration(milliseconds: 400 + steps * 16 + 300);
+    await a.up(timeStamp: end);
+    await b.up(timeStamp: end);
+    await tester.pump();
+  }
+
+  Future<void> chooseMore(WidgetTester tester, String item) async {
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(item));
+    await tester.pumpAndSettle();
   }
 
   /// Taps with [fingers] fingers at once.
@@ -100,8 +162,12 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     final rows = await services.db.select(services.db.strokes).get();
     expect(rows, hasLength(1));
-    expect(rows.single.pageId, InkRepository.scratchPageId);
+    expect(rows.single.pageId, firstPage.id);
     expect(rows.single.minX, lessThan(rows.single.maxX));
+    final notebook = await services.db
+        .select(services.db.notebooks)
+        .getSingle();
+    expect(notebook.updatedAt, testNow, reason: 'writing marks it edited');
   });
 
   testWidgets('two-finger tap undoes and three-finger tap redoes', (
@@ -145,18 +211,42 @@ void main() {
       await first.moveTo(Offset(360, 500 - i * 40.0), timeStamp: t);
       await second.moveTo(Offset(500, 500 - i * 40.0), timeStamp: t);
     }
-    await first.up(timeStamp: const Duration(milliseconds: 300));
-    await second.up(timeStamp: const Duration(milliseconds: 300));
+    await first.up(timeStamp: const Duration(milliseconds: 600));
+    await second.up(timeStamp: const Duration(milliseconds: 600));
     await tester.pump();
 
     expect(ink(tester).length, 0);
-    final transform = tester.widget<Transform>(
-      find.descendant(
-        of: find.byType(ValueListenableBuilder<double>),
-        matching: find.byType(Transform),
-      ),
-    );
-    expect(transform.transform.getTranslation().y, lessThan(-150));
+    expect(scrollOffset(tester), closeTo(200, 1));
+  });
+
+  testWidgets('one finger never scrolls the pages', (tester) async {
+    await addPages(1);
+    await pumpNotebook(tester);
+    await drawStroke(tester, const Offset(200, 600), const Offset(220, 100));
+    expect(scrollOffset(tester), 0);
+    expect(ink(tester).length, 1);
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('two fingers flung keep scrolling after lifting', (tester) async {
+    await addPages(3);
+    await pumpNotebook(tester);
+    final a = await tester.createGesture(pointer: 21);
+    final b = await tester.createGesture(pointer: 22);
+    await a.down(const Offset(400, 600), timeStamp: Duration.zero);
+    await b.down(const Offset(600, 600), timeStamp: Duration.zero);
+    for (var i = 1; i <= 6; i++) {
+      final t = Duration(milliseconds: 400 + i * 16);
+      await a.moveTo(Offset(400, 600 - i * 40.0), timeStamp: t);
+      await b.moveTo(Offset(600, 600 - i * 40.0), timeStamp: t);
+    }
+    await a.up(timeStamp: const Duration(milliseconds: 500));
+    await b.up(timeStamp: const Duration(milliseconds: 500));
+    await tester.pump();
+    final lifted = scrollOffset(tester);
+    expect(lifted, closeTo(240, 1));
+    await tester.pumpAndSettle();
+    expect(scrollOffset(tester), greaterThan(lifted + 200));
   });
 
   testWidgets('toolbar undo and redo follow the history', (tester) async {
@@ -185,9 +275,174 @@ void main() {
 
     await tester.tap(find.byTooltip('Library'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Scratch page'));
+    await tester.tap(find.text('Cell structure'));
     await tester.pumpAndSettle();
     expect(ink(tester).length, 2);
+  });
+
+  testWidgets('Add page appends a page, scrolls to it and takes ink', (
+    tester,
+  ) async {
+    await pumpNotebook(tester);
+    // The button sits after the last page.
+    await twoFingerScroll(tester, -1800);
+    await tester.tap(find.text('Add page'));
+    await tester.pumpAndSettle();
+
+    final controller = controllerOf(tester);
+    expect(controller.pages, hasLength(2));
+    final newPage = controller.pages.last;
+    expect(newPage.background, firstPage.background);
+    expect(await savedOrder(), [firstPage.id, newPage.id]);
+    expect(scrollOffset(tester), controller.layout.scrollToPage(1));
+    expect(controller.currentPage.value, 1);
+
+    await drawStroke(tester, const Offset(200, 300), const Offset(600, 340));
+    await tester.pump(const Duration(seconds: 1));
+    final rows = await services.db.select(services.db.strokes).get();
+    expect(rows.single.pageId, newPage.id);
+
+    // Undo the stroke, then undo adding the page.
+    await multiTap(tester, 2);
+    await multiTap(tester, 2);
+    await tester.pumpAndSettle();
+    expect(controller.pages, hasLength(1));
+    expect(await savedOrder(), [firstPage.id]);
+  });
+
+  testWidgets('More deletes the current page, with Undo', (tester) async {
+    final ids = await addPages(2);
+    await pumpNotebook(tester);
+    await twoFingerScroll(tester, -1800);
+    final controller = controllerOf(tester);
+    expect(controller.currentPage.value, 1);
+
+    await chooseMore(tester, 'Delete page 2');
+    expect(controller.pages.map((p) => p.id), [ids[0], ids[2]]);
+    expect(await savedOrder(), [ids[0], ids[2]]);
+    expect(find.text('Page 2 deleted'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(controller.pages.map((p) => p.id), ids);
+    expect(await savedOrder(), ids);
+  });
+
+  testWidgets('More can add a page too', (tester) async {
+    await pumpNotebook(tester);
+    await chooseMore(tester, 'Add page at the end');
+    expect(controllerOf(tester).pages, hasLength(2));
+    expect(await savedOrder(), hasLength(2));
+  });
+
+  testWidgets('the last page cannot be deleted', (tester) async {
+    await pumpNotebook(tester);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    final item = tester.widget<PopupMenuItem<MoreAction>>(
+      find.widgetWithText(PopupMenuItem<MoreAction>, 'Delete page 1'),
+    );
+    expect(item.enabled, isFalse);
+  });
+
+  testWidgets('More moves the current page down and up', (tester) async {
+    final ids = await addPages(2);
+    await pumpNotebook(tester);
+
+    await chooseMore(tester, 'Move page 1 down');
+    final controller = controllerOf(tester);
+    expect(controller.pages.map((p) => p.id), [ids[1], ids[0], ids[2]]);
+    expect(await savedOrder(), [ids[1], ids[0], ids[2]]);
+    // The moved page stays in view.
+    expect(controller.currentPage.value, 1);
+
+    await chooseMore(tester, 'Move page 2 up');
+    expect(await savedOrder(), ids);
+
+    await multiTap(tester, 2);
+    await tester.pumpAndSettle();
+    expect(await savedOrder(), [ids[1], ids[0], ids[2]]);
+  });
+
+  testWidgets('pages deleted this session are swept on close', (tester) async {
+    final ids = await addPages(1);
+    await pumpNotebook(tester);
+    await chooseMore(tester, 'Delete page 1');
+    await tester.pump(const Duration(seconds: 6));
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
+    final pages = await services.db.select(services.db.pages).get();
+    expect(pages.map((p) => p.id), [ids[1]]);
+  });
+
+  testWidgets('reopens at the page it was left at', (tester) async {
+    await addPages(3);
+    await pumpNotebook(tester);
+    await twoFingerScroll(tester, -1800);
+    await twoFingerScroll(tester, -1800);
+    final controller = controllerOf(tester);
+    expect(controller.currentPage.value, 2);
+    final pageId = controller.pages[2].id;
+
+    await tester.tap(find.byTooltip('Library'));
+    await tester.pumpAndSettle();
+    final saved = await services.db.select(services.db.notebooks).getSingle();
+    expect(saved.lastPageId, pageId);
+    expect(saved.updatedAt, testNow, reason: 'reading is not editing');
+
+    await tester.tap(find.text('Cell structure'));
+    await tester.pumpAndSettle();
+    final reopened = controllerOf(tester);
+    expect(reopened.currentPage.value, 2);
+    expect(scrollOffset(tester), reopened.layout.scrollToPage(2));
+  });
+
+  testWidgets('rotating keeps the current page in view', (tester) async {
+    await addPages(3);
+    await pumpNotebook(tester);
+    await twoFingerScroll(tester, -1800);
+    await twoFingerScroll(tester, -1800);
+    final controller = controllerOf(tester);
+    expect(controller.currentPage.value, 2);
+
+    tester.view.physicalSize = const Size(800, 1280);
+    await tester.pumpAndSettle();
+    expect(controller.currentPage.value, 2);
+    expect(
+      scrollOffset(tester),
+      inInclusiveRange(
+        controller.layout.topOf(2) - controller.layout.viewport.height / 3,
+        controller.layout.topOf(2) + controller.layout.extentOf(2),
+      ),
+    );
+  });
+
+  testWidgets('only pages near the screen hold ink', (tester) async {
+    await addPages(7);
+    await pumpNotebook(tester);
+    final controller = controllerOf(tester);
+    // The visible page and the one below (within a screen).
+    expect(controller.ink.loadedPageCount, lessThanOrEqualTo(2));
+    expect(controller.ink.layerOf(firstPage.id), isNotNull);
+
+    for (var i = 0; i < 5; i++) {
+      await twoFingerScroll(tester, -1800);
+    }
+    expect(controller.currentPage.value, greaterThan(4));
+    expect(controller.ink.layerOf(firstPage.id), isNull);
+    expect(controller.ink.loadedPageCount, lessThanOrEqualTo(3));
+  });
+
+  testWidgets('tapping the title renames the notebook', (tester) async {
+    await pumpNotebook(tester);
+    await tester.tap(find.byTooltip('Rename'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Mitosis');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mitosis'), findsOneWidget);
+    final row = await services.db.select(services.db.notebooks).getSingle();
+    expect(row.title, 'Mitosis');
   });
 
   testWidgets('More shows diagnostics and copies a bug report', (tester) async {
@@ -210,10 +465,7 @@ void main() {
     await pumpNotebook(tester);
     await drawStroke(tester, const Offset(200, 300), const Offset(600, 340));
 
-    await tester.tap(find.byTooltip('More'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Diagnostics'));
-    await tester.pumpAndSettle();
+    await chooseMore(tester, 'Diagnostics');
     expect(find.textContaining('Frames  p90'), findsOneWidget);
     expect(find.textContaining('Strokes 1'), findsOneWidget);
 
@@ -227,10 +479,7 @@ void main() {
     expect(find.textContaining('Bug report copied'), findsOneWidget);
 
     // Hide the overlay again so its timer stops.
-    await tester.tap(find.byTooltip('More'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Diagnostics'));
-    await tester.pumpAndSettle();
+    await chooseMore(tester, 'Diagnostics');
   });
 
   testWidgets('the toolbar fits a portrait 8-inch screen', (tester) async {
@@ -241,9 +490,8 @@ void main() {
 
   testWidgets('golden: notebook with handwriting', (tester) async {
     final repo = InkRepository(services.db);
-    final page = await repo.ensureScratchPage();
     for (final stroke in _sampleHandwriting()) {
-      repo.saveStroke(page.id, stroke);
+      repo.saveStroke(firstPage.id, stroke);
     }
     await repo.flush();
     repo.dispose();

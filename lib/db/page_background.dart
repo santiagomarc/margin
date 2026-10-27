@@ -1,4 +1,12 @@
+import 'dart:ui';
+
 enum PaperTemplate { blank, lined, grid, dotted }
+
+/// Paper sizes in points (1/72 inch).
+abstract final class PageSizes {
+  static const a4 = Size(595.28, 841.89);
+  static const letter = Size(612, 792);
+}
 
 /// What is drawn under a page's ink: a paper template or a page of the
 /// notebook's PDF.

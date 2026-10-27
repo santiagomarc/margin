@@ -7,6 +7,8 @@ import 'package:margin/canvas/ink_stroke.dart';
 import 'package:margin/db/database.dart';
 import 'package:margin/db/ink_repository.dart';
 
+import '../helpers.dart';
+
 InkStroke stroke(String id, int millis, {double x = 10}) => InkStroke(
   id: id,
   tool: StrokeTool.pen,
@@ -31,17 +33,25 @@ void main() {
     await db.close();
   });
 
-  test('the scratch page is created once and reused', () async {
-    final first = await repo.ensureScratchPage();
-    final second = await repo.ensureScratchPage();
-    expect(first.id, InkRepository.scratchPageId);
-    expect(second.id, first.id);
-    expect(first.background, const TemplateBackground(PaperTemplate.lined));
-    expect(await db.select(db.notebooks).get(), hasLength(1));
+  test('a flush marks the notebook as edited', () async {
+    final page = await createTestNotebook(db);
+    final edited = DateTime.utc(2026, 10, 28, 8);
+    repo = InkRepository(db, notebookId: page.notebookId, now: () => edited);
+    repo.saveStroke(page.id, stroke('a', 1000));
+    await repo.flush();
+    final notebook = await db.select(db.notebooks).getSingle();
+    expect(notebook.updatedAt, edited);
+  });
+
+  test('loading a page includes changes not flushed yet', () async {
+    final page = await createTestNotebook(db);
+    repo.saveStroke(page.id, stroke('a', 1000));
+    expect(repo.hasPendingWrites, isTrue);
+    expect((await repo.loadStrokes(page.id)).map((s) => s.id), ['a']);
   });
 
   test('strokes save in one flush and load back in draw order', () async {
-    final page = await repo.ensureScratchPage();
+    final page = await createTestNotebook(db);
     repo
       ..saveStroke(page.id, stroke('b', 2000, x: 50))
       ..saveStroke(page.id, stroke('a', 1000));
@@ -56,7 +66,7 @@ void main() {
   });
 
   test('deletes are written too', () async {
-    final page = await repo.ensureScratchPage();
+    final page = await createTestNotebook(db);
     repo.saveStroke(page.id, stroke('a', 1000));
     await repo.flush();
     repo.deleteStroke('a');
@@ -65,7 +75,7 @@ void main() {
   });
 
   test('a stroke added and undone before a flush is never written', () async {
-    final page = await repo.ensureScratchPage();
+    final page = await createTestNotebook(db);
     repo
       ..saveStroke(page.id, stroke('a', 1000))
       ..deleteStroke('a');
@@ -76,7 +86,7 @@ void main() {
   test('a failed flush keeps the changes for the next one', () async {
     final otherDb = MarginDatabase(NativeDatabase.memory());
     final other = InkRepository(otherDb);
-    final page = await other.ensureScratchPage();
+    final page = await createTestNotebook(otherDb);
     other.saveStroke(page.id, stroke('a', 1000));
     await otherDb.close();
 
@@ -87,7 +97,7 @@ void main() {
 
   test('pending writes flush by themselves after the delay', () async {
     repo = InkRepository(db, flushDelay: const Duration(milliseconds: 10));
-    final page = await repo.ensureScratchPage();
+    final page = await createTestNotebook(db);
     repo.saveStroke(page.id, stroke('a', 1000));
     expect(repo.hasPendingWrites, isTrue);
     await Future<void>.delayed(const Duration(milliseconds: 50));
