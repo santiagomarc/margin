@@ -11,60 +11,30 @@ import 'database.dart';
 class InkRepository {
   InkRepository(
     this._db, {
+    this.notebookId,
     this.flushDelay = const Duration(milliseconds: 400),
-  });
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
 
   final MarginDatabase _db;
+
+  /// When set, every flush also marks this notebook as edited.
+  final String? notebookId;
   final Duration flushDelay;
+  final DateTime Function() _now;
 
   /// Latest pending change per stroke id: a row to write, or null to delete.
   final Map<String, StrokesCompanion?> _pending = {};
   Timer? _timer;
   Future<void> _flushing = Future.value();
 
-  static const scratchNotebookId = 'scratch';
-  static const scratchPageId = 'scratch-page-1';
-
-  /// A4 portrait, in points.
-  static const a4 = Size(595.28, 841.89);
-
-  /// The built-in scratch notebook's only page, created on first use.
-  Future<NotebookPage> ensureScratchPage() async {
-    final now = DateTime.now().toUtc();
-    await _db.transaction(() async {
-      await _db
-          .into(_db.notebooks)
-          .insert(
-            NotebooksCompanion.insert(
-              id: scratchNotebookId,
-              title: 'Scratch page',
-              kind: NotebookKind.notes,
-              pageIds: const [scratchPageId],
-              createdAt: now,
-              updatedAt: now,
-            ),
-            mode: InsertMode.insertOrIgnore,
-          );
-      await _db
-          .into(_db.pages)
-          .insert(
-            PagesCompanion.insert(
-              id: scratchPageId,
-              notebookId: scratchNotebookId,
-              width: a4.width,
-              height: a4.height,
-              background: const TemplateBackground(PaperTemplate.lined),
-            ),
-            mode: InsertMode.insertOrIgnore,
-          );
-    });
-    return (_db.select(
-      _db.pages,
-    )..where((p) => p.id.equals(scratchPageId))).getSingle();
-  }
-
-  /// Strokes of a page in draw order.
+  /// Strokes of a page in draw order, including every change queued so far.
   Future<List<InkStroke>> loadStrokes(String pageId) async {
+    try {
+      await flush();
+    } catch (_) {
+      // The changes stay queued for the next flush; load what is saved.
+    }
     final rows =
         await (_db.select(_db.strokes)
               ..where((s) => s.pageId.equals(pageId))
@@ -145,6 +115,13 @@ class InkRepository {
         }
         if (deletes.isNotEmpty) {
           b.deleteWhere(_db.strokes, (s) => s.id.isIn(deletes));
+        }
+        if (notebookId case final id?) {
+          b.update(
+            _db.notebooks,
+            NotebooksCompanion(updatedAt: Value(_now().toUtc())),
+            where: (n) => n.id.equals(id),
+          );
         }
       });
     } catch (_) {

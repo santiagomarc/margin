@@ -3,7 +3,23 @@ import 'package:flutter/material.dart';
 import '../history/history.dart';
 import 'theme.dart';
 
-enum MoreAction { toggleDiagnostics, copyBugReport }
+enum MoreAction {
+  addPage,
+  movePageUp,
+  movePageDown,
+  deletePage,
+  toggleDiagnostics,
+  copyBugReport,
+}
+
+/// What the page items of the More menu act on, read when the menu opens.
+class PageMenuState {
+  const PageMenuState({required this.current, required this.count});
+
+  /// Zero-based index of the current page.
+  final int current;
+  final int count;
+}
 
 /// The notebook toolbar from docs/PLAN.md, "Screens": back and title on the
 /// left, tools in the middle, undo/redo/review/pages/more on the right.
@@ -13,7 +29,9 @@ class NotebookToolbar extends StatelessWidget {
     required this.title,
     required this.history,
     required this.diagnosticsVisible,
+    required this.pageMenu,
     required this.onBack,
+    required this.onRename,
     required this.onUndo,
     required this.onRedo,
     required this.onMore,
@@ -24,7 +42,9 @@ class NotebookToolbar extends StatelessWidget {
   final String title;
   final History history;
   final bool diagnosticsVisible;
+  final PageMenuState Function() pageMenu;
   final VoidCallback onBack;
+  final VoidCallback onRename;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final ValueChanged<MoreAction> onMore;
@@ -43,11 +63,28 @@ class NotebookToolbar extends StatelessWidget {
           onPressed: onBack,
         ),
         Flexible(
-          child: Text(
-            title,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
+          child: Tooltip(
+            message: 'Rename',
+            child: InkWell(
+              onTap: onRename,
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: 1,
+                    child: Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],
@@ -131,17 +168,41 @@ class NotebookToolbar extends StatelessWidget {
           icon: const Icon(Icons.more_horiz),
           tooltip: 'More',
           onSelected: onMore,
-          itemBuilder: (context) => [
-            CheckedPopupMenuItem(
-              value: MoreAction.toggleDiagnostics,
-              checked: diagnosticsVisible,
-              child: const Text('Diagnostics'),
-            ),
-            const PopupMenuItem(
-              value: MoreAction.copyBugReport,
-              child: Text('Copy bug report'),
-            ),
-          ],
+          itemBuilder: (context) {
+            final pages = pageMenu();
+            final n = pages.current + 1;
+            return [
+              const PopupMenuItem(
+                value: MoreAction.addPage,
+                child: Text('Add page at the end'),
+              ),
+              PopupMenuItem(
+                value: MoreAction.movePageUp,
+                enabled: pages.current > 0,
+                child: Text('Move page $n up'),
+              ),
+              PopupMenuItem(
+                value: MoreAction.movePageDown,
+                enabled: pages.current < pages.count - 1,
+                child: Text('Move page $n down'),
+              ),
+              PopupMenuItem(
+                value: MoreAction.deletePage,
+                enabled: pages.count > 1,
+                child: Text('Delete page $n'),
+              ),
+              const PopupMenuDivider(),
+              CheckedPopupMenuItem(
+                value: MoreAction.toggleDiagnostics,
+                checked: diagnosticsVisible,
+                child: const Text('Diagnostics'),
+              ),
+              const PopupMenuItem(
+                value: MoreAction.copyBugReport,
+                child: Text('Copy bug report'),
+              ),
+            ];
+          },
         ),
       ],
     );

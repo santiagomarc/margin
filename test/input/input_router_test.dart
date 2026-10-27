@@ -21,6 +21,10 @@ class _Recorder implements InputHandler {
   void strokeCancel() => calls.add('cancel');
   @override
   void multiFingerTap(int fingers) => calls.add('tap$fingers');
+  Offset? flung;
+
+  @override
+  void scrollEnd(Offset velocity) => flung = velocity;
   @override
   void scrollBy(Offset delta) {
     scrolled += delta;
@@ -174,5 +178,41 @@ void main() {
 
     down(2, Offset.zero, 1000, size: 0.2);
     expect(stats.maxContactSize, 0.2, reason: 'reset per touch sequence');
+  });
+
+  test('a scroll that lifts while moving flings at its speed', () {
+    down(1, const Offset(100, 500), 0);
+    down(2, const Offset(200, 500), 10);
+    for (var i = 1; i <= 6; i++) {
+      move(1, Offset(100, 500 - i * 20.0), 100 + i * 16);
+      move(2, Offset(200, 500 - i * 20.0), 100 + i * 16);
+    }
+    up(1, const Offset(100, 380), 200);
+    up(2, const Offset(200, 380), 200);
+    expect(handler.flung, isNotNull);
+    // 20 px every 16 ms upwards: about 1250 px/s.
+    expect(handler.flung!.dy, closeTo(-1250, 150));
+    expect(handler.calls, isNot(contains('tap2')));
+  });
+
+  test('a scroll that rests before lifting does not fling', () {
+    down(1, const Offset(100, 500), 0);
+    down(2, const Offset(200, 500), 10);
+    for (var i = 1; i <= 6; i++) {
+      move(1, Offset(100, 500 - i * 20.0), 100 + i * 16);
+      move(2, Offset(200, 500 - i * 20.0), 100 + i * 16);
+    }
+    up(1, const Offset(100, 380), 500);
+    up(2, const Offset(200, 380), 500);
+    expect(handler.flung, Offset.zero);
+  });
+
+  test('a two-finger tap never reports a scroll end', () {
+    down(1, const Offset(100, 500), 0);
+    down(2, const Offset(200, 500), 20);
+    up(1, const Offset(100, 500), 120);
+    up(2, const Offset(200, 500), 130);
+    expect(handler.calls.last, 'tap2');
+    expect(handler.flung, isNull);
   });
 }

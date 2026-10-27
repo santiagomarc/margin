@@ -51,6 +51,11 @@ class Notebooks extends Table {
   IntColumn get createdAt => integer().map(const MillisDateTimeConverter())();
   IntColumn get updatedAt => integer().map(const MillisDateTimeConverter())();
 
+  // Where the notebook was left (v2). Not a foreign key: a page that is no
+  // longer in [pageIds] just means "start at the top".
+  TextColumn get lastPageId => text().nullable()();
+  RealColumn get lastZoom => real().withDefault(const Constant(1.0))();
+
   @override
   Set<Column<Object>> get primaryKey => {id};
 }
@@ -123,4 +128,14 @@ class Tapes extends Table {
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+}
+
+/// App preferences as key-value pairs (v2): library sort, paper defaults,
+/// later tool presets and gesture toggles.
+class Settings extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {key};
 }

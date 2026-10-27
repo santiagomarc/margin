@@ -5,10 +5,17 @@ import '../diagnostics/diagnostics.dart';
 
 /// App-wide services, created once in main() (or by a test).
 class AppServices {
-  AppServices({required this.db, required this.diagnostics});
+  AppServices({
+    required this.db,
+    required this.diagnostics,
+    DateTime Function()? now,
+  }) : now = now ?? DateTime.now;
 
   final MarginDatabase db;
   final Diagnostics diagnostics;
+
+  /// The clock (fixed in tests, so dates in goldens never change).
+  final DateTime Function() now;
 }
 
 class AppScope extends InheritedWidget {

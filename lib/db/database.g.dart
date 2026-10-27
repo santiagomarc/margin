@@ -702,6 +702,29 @@ class $NotebooksTable extends Notebooks
         type: DriftSqlType.int,
         requiredDuringInsert: true,
       ).withConverter<DateTime>($NotebooksTable.$converterupdatedAt);
+  static const VerificationMeta _lastPageIdMeta = const VerificationMeta(
+    'lastPageId',
+  );
+  @override
+  late final GeneratedColumn<String> lastPageId = GeneratedColumn<String>(
+    'last_page_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastZoomMeta = const VerificationMeta(
+    'lastZoom',
+  );
+  @override
+  late final GeneratedColumn<double> lastZoom = GeneratedColumn<double>(
+    'last_zoom',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1.0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -712,6 +735,8 @@ class $NotebooksTable extends Notebooks
     pageIds,
     createdAt,
     updatedAt,
+    lastPageId,
+    lastZoom,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -748,6 +773,21 @@ class $NotebooksTable extends Notebooks
       context.handle(
         _pdfFileIdMeta,
         pdfFileId.isAcceptableOrUnknown(data['pdf_file_id']!, _pdfFileIdMeta),
+      );
+    }
+    if (data.containsKey('last_page_id')) {
+      context.handle(
+        _lastPageIdMeta,
+        lastPageId.isAcceptableOrUnknown(
+          data['last_page_id']!,
+          _lastPageIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_zoom')) {
+      context.handle(
+        _lastZoomMeta,
+        lastZoom.isAcceptableOrUnknown(data['last_zoom']!, _lastZoomMeta),
       );
     }
     return context;
@@ -799,6 +839,14 @@ class $NotebooksTable extends Notebooks
           data['${effectivePrefix}updated_at'],
         )!,
       ),
+      lastPageId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_page_id'],
+      ),
+      lastZoom: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}last_zoom'],
+      )!,
     );
   }
 
@@ -828,6 +876,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
   final List<String> pageIds;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? lastPageId;
+  final double lastZoom;
   const Notebook({
     required this.id,
     this.subjectId,
@@ -837,6 +887,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     required this.pageIds,
     required this.createdAt,
     required this.updatedAt,
+    this.lastPageId,
+    required this.lastZoom,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -869,6 +921,10 @@ class Notebook extends DataClass implements Insertable<Notebook> {
         $NotebooksTable.$converterupdatedAt.toSql(updatedAt),
       );
     }
+    if (!nullToAbsent || lastPageId != null) {
+      map['last_page_id'] = Variable<String>(lastPageId);
+    }
+    map['last_zoom'] = Variable<double>(lastZoom);
     return map;
   }
 
@@ -886,6 +942,10 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       pageIds: Value(pageIds),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
+      lastPageId: lastPageId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastPageId),
+      lastZoom: Value(lastZoom),
     );
   }
 
@@ -905,6 +965,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       pageIds: serializer.fromJson<List<String>>(json['pageIds']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      lastPageId: serializer.fromJson<String?>(json['lastPageId']),
+      lastZoom: serializer.fromJson<double>(json['lastZoom']),
     );
   }
   @override
@@ -921,6 +983,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       'pageIds': serializer.toJson<List<String>>(pageIds),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'lastPageId': serializer.toJson<String?>(lastPageId),
+      'lastZoom': serializer.toJson<double>(lastZoom),
     };
   }
 
@@ -933,6 +997,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     List<String>? pageIds,
     DateTime? createdAt,
     DateTime? updatedAt,
+    Value<String?> lastPageId = const Value.absent(),
+    double? lastZoom,
   }) => Notebook(
     id: id ?? this.id,
     subjectId: subjectId.present ? subjectId.value : this.subjectId,
@@ -942,6 +1008,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     pageIds: pageIds ?? this.pageIds,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    lastPageId: lastPageId.present ? lastPageId.value : this.lastPageId,
+    lastZoom: lastZoom ?? this.lastZoom,
   );
   Notebook copyWithCompanion(NotebooksCompanion data) {
     return Notebook(
@@ -953,6 +1021,10 @@ class Notebook extends DataClass implements Insertable<Notebook> {
       pageIds: data.pageIds.present ? data.pageIds.value : this.pageIds,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      lastPageId: data.lastPageId.present
+          ? data.lastPageId.value
+          : this.lastPageId,
+      lastZoom: data.lastZoom.present ? data.lastZoom.value : this.lastZoom,
     );
   }
 
@@ -966,7 +1038,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           ..write('pdfFileId: $pdfFileId, ')
           ..write('pageIds: $pageIds, ')
           ..write('createdAt: $createdAt, ')
-          ..write('updatedAt: $updatedAt')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('lastPageId: $lastPageId, ')
+          ..write('lastZoom: $lastZoom')
           ..write(')'))
         .toString();
   }
@@ -981,6 +1055,8 @@ class Notebook extends DataClass implements Insertable<Notebook> {
     pageIds,
     createdAt,
     updatedAt,
+    lastPageId,
+    lastZoom,
   );
   @override
   bool operator ==(Object other) =>
@@ -993,7 +1069,9 @@ class Notebook extends DataClass implements Insertable<Notebook> {
           other.pdfFileId == this.pdfFileId &&
           other.pageIds == this.pageIds &&
           other.createdAt == this.createdAt &&
-          other.updatedAt == this.updatedAt);
+          other.updatedAt == this.updatedAt &&
+          other.lastPageId == this.lastPageId &&
+          other.lastZoom == this.lastZoom);
 }
 
 class NotebooksCompanion extends UpdateCompanion<Notebook> {
@@ -1005,6 +1083,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
   final Value<List<String>> pageIds;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
+  final Value<String?> lastPageId;
+  final Value<double> lastZoom;
   final Value<int> rowid;
   const NotebooksCompanion({
     this.id = const Value.absent(),
@@ -1015,6 +1095,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     this.pageIds = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
+    this.lastPageId = const Value.absent(),
+    this.lastZoom = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   NotebooksCompanion.insert({
@@ -1026,6 +1108,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     required List<String> pageIds,
     required DateTime createdAt,
     required DateTime updatedAt,
+    this.lastPageId = const Value.absent(),
+    this.lastZoom = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        title = Value(title),
@@ -1042,6 +1126,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Expression<String>? pageIds,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
+    Expression<String>? lastPageId,
+    Expression<double>? lastZoom,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1053,6 +1139,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       if (pageIds != null) 'page_ids': pageIds,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
+      if (lastPageId != null) 'last_page_id': lastPageId,
+      if (lastZoom != null) 'last_zoom': lastZoom,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1066,6 +1154,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
     Value<List<String>>? pageIds,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
+    Value<String?>? lastPageId,
+    Value<double>? lastZoom,
     Value<int>? rowid,
   }) {
     return NotebooksCompanion(
@@ -1077,6 +1167,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
       pageIds: pageIds ?? this.pageIds,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      lastPageId: lastPageId ?? this.lastPageId,
+      lastZoom: lastZoom ?? this.lastZoom,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1116,6 +1208,12 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
         $NotebooksTable.$converterupdatedAt.toSql(updatedAt.value),
       );
     }
+    if (lastPageId.present) {
+      map['last_page_id'] = Variable<String>(lastPageId.value);
+    }
+    if (lastZoom.present) {
+      map['last_zoom'] = Variable<double>(lastZoom.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1133,6 +1231,8 @@ class NotebooksCompanion extends UpdateCompanion<Notebook> {
           ..write('pageIds: $pageIds, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
+          ..write('lastPageId: $lastPageId, ')
+          ..write('lastZoom: $lastZoom, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2917,6 +3017,211 @@ class TapesCompanion extends UpdateCompanion<Tape> {
   }
 }
 
+class $SettingsTable extends Settings with TableInfo<$SettingsTable, Setting> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _keyMeta = const VerificationMeta('key');
+  @override
+  late final GeneratedColumn<String> key = GeneratedColumn<String>(
+    'key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _valueMeta = const VerificationMeta('value');
+  @override
+  late final GeneratedColumn<String> value = GeneratedColumn<String>(
+    'value',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [key, value];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Setting> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('key')) {
+      context.handle(
+        _keyMeta,
+        key.isAcceptableOrUnknown(data['key']!, _keyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_keyMeta);
+    }
+    if (data.containsKey('value')) {
+      context.handle(
+        _valueMeta,
+        value.isAcceptableOrUnknown(data['value']!, _valueMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_valueMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {key};
+  @override
+  Setting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Setting(
+      key: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}key'],
+      )!,
+      value: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}value'],
+      )!,
+    );
+  }
+
+  @override
+  $SettingsTable createAlias(String alias) {
+    return $SettingsTable(attachedDatabase, alias);
+  }
+}
+
+class Setting extends DataClass implements Insertable<Setting> {
+  final String key;
+  final String value;
+  const Setting({required this.key, required this.value});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['key'] = Variable<String>(key);
+    map['value'] = Variable<String>(value);
+    return map;
+  }
+
+  SettingsCompanion toCompanion(bool nullToAbsent) {
+    return SettingsCompanion(key: Value(key), value: Value(value));
+  }
+
+  factory Setting.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Setting(
+      key: serializer.fromJson<String>(json['key']),
+      value: serializer.fromJson<String>(json['value']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'key': serializer.toJson<String>(key),
+      'value': serializer.toJson<String>(value),
+    };
+  }
+
+  Setting copyWith({String? key, String? value}) =>
+      Setting(key: key ?? this.key, value: value ?? this.value);
+  Setting copyWithCompanion(SettingsCompanion data) {
+    return Setting(
+      key: data.key.present ? data.key.value : this.key,
+      value: data.value.present ? data.value.value : this.value,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Setting(')
+          ..write('key: $key, ')
+          ..write('value: $value')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(key, value);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Setting && other.key == this.key && other.value == this.value);
+}
+
+class SettingsCompanion extends UpdateCompanion<Setting> {
+  final Value<String> key;
+  final Value<String> value;
+  final Value<int> rowid;
+  const SettingsCompanion({
+    this.key = const Value.absent(),
+    this.value = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SettingsCompanion.insert({
+    required String key,
+    required String value,
+    this.rowid = const Value.absent(),
+  }) : key = Value(key),
+       value = Value(value);
+  static Insertable<Setting> custom({
+    Expression<String>? key,
+    Expression<String>? value,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (key != null) 'key': key,
+      if (value != null) 'value': value,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SettingsCompanion copyWith({
+    Value<String>? key,
+    Value<String>? value,
+    Value<int>? rowid,
+  }) {
+    return SettingsCompanion(
+      key: key ?? this.key,
+      value: value ?? this.value,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (key.present) {
+      map['key'] = Variable<String>(key.value);
+    }
+    if (value.present) {
+      map['value'] = Variable<String>(value.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SettingsCompanion(')
+          ..write('key: $key, ')
+          ..write('value: $value, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$MarginDatabase extends GeneratedDatabase {
   _$MarginDatabase(QueryExecutor e) : super(e);
   $MarginDatabaseManager get managers => $MarginDatabaseManager(this);
@@ -2926,6 +3231,7 @@ abstract class _$MarginDatabase extends GeneratedDatabase {
   late final $PagesTable pages = $PagesTable(this);
   late final $StrokesTable strokes = $StrokesTable(this);
   late final $TapesTable tapes = $TapesTable(this);
+  late final $SettingsTable settings = $SettingsTable(this);
   late final Index pagesNotebookId = Index(
     'pages_notebook_id',
     'CREATE INDEX pages_notebook_id ON pages (notebook_id)',
@@ -2949,6 +3255,7 @@ abstract class _$MarginDatabase extends GeneratedDatabase {
     pages,
     strokes,
     tapes,
+    settings,
     pagesNotebookId,
     strokesPageId,
     tapesPageId,
@@ -3555,6 +3862,8 @@ typedef $$NotebooksTableCreateCompanionBuilder = NotebooksCompanion Function({
   required List<String> pageIds,
   required DateTime createdAt,
   required DateTime updatedAt,
+  Value<String?> lastPageId,
+  Value<double> lastZoom,
   Value<int> rowid,
 });
 typedef $$NotebooksTableUpdateCompanionBuilder = NotebooksCompanion Function({
@@ -3566,6 +3875,8 @@ typedef $$NotebooksTableUpdateCompanionBuilder = NotebooksCompanion Function({
   Value<List<String>> pageIds,
   Value<DateTime> createdAt,
   Value<DateTime> updatedAt,
+  Value<String?> lastPageId,
+  Value<double> lastZoom,
   Value<int> rowid,
 });
 
@@ -3669,6 +3980,16 @@ class $$NotebooksTableFilterComposer
         column: $table.updatedAt,
         builder: (column) => ColumnWithTypeConverterFilters(column),
       );
+
+  ColumnFilters<String> get lastPageId => $composableBuilder(
+    column: $table.lastPageId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get lastZoom => $composableBuilder(
+    column: $table.lastZoom,
+    builder: (column) => ColumnFilters(column),
+  );
 
   $$SubjectsTableFilterComposer get subjectId {
     final $$SubjectsTableFilterComposer composer = $composerBuilder(
@@ -3781,6 +4102,16 @@ class $$NotebooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get lastPageId => $composableBuilder(
+    column: $table.lastPageId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get lastZoom => $composableBuilder(
+    column: $table.lastZoom,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$SubjectsTableOrderingComposer get subjectId {
     final $$SubjectsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -3854,6 +4185,14 @@ class $$NotebooksTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<DateTime, int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get lastPageId => $composableBuilder(
+    column: $table.lastPageId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get lastZoom =>
+      $composableBuilder(column: $table.lastZoom, builder: (column) => column);
 
   $$SubjectsTableAnnotationComposer get subjectId {
     final $$SubjectsTableAnnotationComposer composer = $composerBuilder(
@@ -3967,6 +4306,8 @@ class $$NotebooksTableTableManager
                 Value<List<String>> pageIds = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
+                Value<String?> lastPageId = const Value.absent(),
+                Value<double> lastZoom = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => NotebooksCompanion(
                 id: id,
@@ -3977,6 +4318,8 @@ class $$NotebooksTableTableManager
                 pageIds: pageIds,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                lastPageId: lastPageId,
+                lastZoom: lastZoom,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -3989,6 +4332,8 @@ class $$NotebooksTableTableManager
                 required List<String> pageIds,
                 required DateTime createdAt,
                 required DateTime updatedAt,
+                Value<String?> lastPageId = const Value.absent(),
+                Value<double> lastZoom = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => NotebooksCompanion.insert(
                 id: id,
@@ -3999,6 +4344,8 @@ class $$NotebooksTableTableManager
                 pageIds: pageIds,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
+                lastPageId: lastPageId,
+                lastZoom: lastZoom,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -5506,6 +5853,140 @@ typedef $$TapesTableProcessedTableManager =
       Tape,
       PrefetchHooks Function({bool pageId})
     >;
+typedef $$SettingsTableCreateCompanionBuilder = SettingsCompanion Function({
+  required String key,
+  required String value,
+  Value<int> rowid,
+});
+typedef $$SettingsTableUpdateCompanionBuilder = SettingsCompanion Function({
+  Value<String> key,
+  Value<String> value,
+  Value<int> rowid,
+});
+
+class $$SettingsTableFilterComposer
+    extends Composer<_$MarginDatabase, $SettingsTable> {
+  $$SettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SettingsTableOrderingComposer
+    extends Composer<_$MarginDatabase, $SettingsTable> {
+  $$SettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get key => $composableBuilder(
+    column: $table.key,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get value => $composableBuilder(
+    column: $table.value,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SettingsTableAnnotationComposer
+    extends Composer<_$MarginDatabase, $SettingsTable> {
+  $$SettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get key =>
+      $composableBuilder(column: $table.key, builder: (column) => column);
+
+  GeneratedColumn<String> get value =>
+      $composableBuilder(column: $table.value, builder: (column) => column);
+}
+
+class $$SettingsTableTableManager
+    extends
+        RootTableManager<
+          _$MarginDatabase,
+          $SettingsTable,
+          Setting,
+          $$SettingsTableFilterComposer,
+          $$SettingsTableOrderingComposer,
+          $$SettingsTableAnnotationComposer,
+          $$SettingsTableCreateCompanionBuilder,
+          $$SettingsTableUpdateCompanionBuilder,
+          (Setting, BaseReferences<_$MarginDatabase, $SettingsTable, Setting>),
+          Setting,
+          PrefetchHooks Function()
+        > {
+  $$SettingsTableTableManager(_$MarginDatabase db, $SettingsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SettingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SettingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> key = const Value.absent(),
+            Value<String> value = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) => SettingsCompanion(key: key, value: value, rowid: rowid),
+          createCompanionCallback: ({
+            required String key,
+            required String value,
+            Value<int> rowid = const Value.absent(),
+          }) => SettingsCompanion.insert(key: key, value: value, rowid: rowid),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SettingsTable, Setting>(table),
+                  BaseReferences<_$MarginDatabase, $SettingsTable, Setting>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$MarginDatabase,
+      $SettingsTable,
+      Setting,
+      $$SettingsTableFilterComposer,
+      $$SettingsTableOrderingComposer,
+      $$SettingsTableAnnotationComposer,
+      $$SettingsTableCreateCompanionBuilder,
+      $$SettingsTableUpdateCompanionBuilder,
+      (Setting, BaseReferences<_$MarginDatabase, $SettingsTable, Setting>),
+      Setting,
+      PrefetchHooks Function()
+    >;
 
 class $MarginDatabaseManager {
   final _$MarginDatabase _db;
@@ -5522,4 +6003,6 @@ class $MarginDatabaseManager {
       $$StrokesTableTableManager(_db, _db.strokes);
   $$TapesTableTableManager get tapes =>
       $$TapesTableTableManager(_db, _db.tapes);
+  $$SettingsTableTableManager get settings =>
+      $$SettingsTableTableManager(_db, _db.settings);
 }

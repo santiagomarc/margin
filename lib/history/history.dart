@@ -37,6 +37,13 @@ class History extends ChangeNotifier {
     return true;
   }
 
+  /// Undoes [command] only if it is the latest change (a snackbar's Undo must
+  /// not undo something done after it).
+  bool undoIfLast(Command command) {
+    if (_undo.isEmpty || !identical(_undo.last, command)) return false;
+    return undo();
+  }
+
   /// Returns false when there is nothing to redo.
   bool redo() {
     if (_redo.isEmpty) return false;
